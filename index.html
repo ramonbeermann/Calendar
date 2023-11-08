@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Kalender</title>
+  <link href='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.css' rel='stylesheet' />
+  <style>
+    /* Stil für das Overlay-Frame */
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+    }
+
+    #event-form {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js'></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js'></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.js'></script>
+</head>
+<body>
+  <div id='calendar'></div>
+
+  <div id="overlay">
+    <div id="event-form">
+      <span id="close-form" style="float: right; cursor: pointer;">X</span>
+      <h3 id="form-title">Termin erstellen</h3>
+      <input type="text" id="patient-name" placeholder="Patientenname">
+      <input type="text" id="event-title" placeholder="Terminname">
+      <select id="event-color">
+        <option value="red">Rot</option>
+        <option value="blue">Blau</option>
+        <option value="green">Grün</option>
+      </select>
+      <select id="event-duration">
+        <option value="00:30:00">30 Minuten</option>
+        <option value="01:00:00">1 Stunde</option>
+        <option value="02:00:00">2 Stunden</option>
+      </select>
+      <input type="datetime-local" id="event-start" placeholder="Startzeit">
+      <input type="datetime-local" id="event-end" placeholder="Endzeit">
+      <input type="date" id="event-date" placeholder="Datum" disabled>
+      <label for="recurring">Wiederholung:</label>
+      <select id="recurring">
+        <option value="none">Keine</option>
+        <option value="daily">Täglich</option>
+        <option value="weekly">Wöchentlich</option>
+        <option value="monthly">Monatlich</option>
+      </select>
+      <button id="save-event">Speichern</button>
+      <button id="delete-event" style="display: none; background-color: red; color: white;">Löschen</button>
+    </div>
+  </div>
+
+  <script>
+    $(document).ready(function() {
+      var calendar = $('#calendar');
+      var formVisible = false;
+      var selectedEvent;
+
+      calendar.fullCalendar({
+        defaultView: 'month',
+        header: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'month,agendaWeek,agendaDay'
+        },
+        editable: true,
+        eventLimit: true,
+        selectable: true,
+        selectHelper: true,
+        select: function(start, end) {
+          if (!formVisible) {
+            $('#form-title').text('Termin erstellen');
+            $('#delete-event').hide();
+            $('#overlay').show();
+            $('#event-form').show();
+            $('#event-start').val(moment(start).format('YYYY-MM-DDTHH:mm'));
+            $('#event-end').val(moment(end).format('YYYY-MM-DDTHH:mm'));
+            $('#event-date').val(moment(start).format('YYYY-MM-DD'));
+          }
+          calendar.fullCalendar('unselect');
+        },
+        eventRender: function(event, element) {
+          element.css('background-color', event.color);
+          element.click(function() {
+            selectedEvent = event;
+            $('#form-title').text('Termin bearbeiten');
+            $('#delete-event').show();
+            $('#overlay').show();
+            $('#event-form').show();
+            $('#patient-name').val(event.title.split(' - ')[0]);
+            $('#event-title').val(event.title.split(' - ')[1]);
+            $('#event-color').val(event.color);
+            $('#event-start').val(event.start.format('YYYY-MM-DDTHH:mm'));
+            $('#event-end').val(event.end.format('YYYY-MM-DDTHH:mm'));
+            $('#event-date').val(event.start.format('YYYY-MM-DD'));
+            $('#recurring').val('none');
+          });
+        }
+      });
+
+      // Schließe das Overlay und das Formular
+      $('#close-form').click(function() {
+        $('#overlay').hide();
+        $('#event-form').hide();
+        formVisible = false;
+      });
+
+      // Speichere oder aktualisiere das Event
+      $('#save-event').click(function() {
+        var patientName = $('#patient-name').val();
+        var title = $('#event-title').val();
+        var color = $('#event-color').val();
+        var start = moment($('#event-start').val());
+        var end = moment($('#event-end').val());
+        var recurring = $('#recurring').val();
+
+        if (patientName && title) {
+          if (selectedEvent) {
+            // Aktualisiere ein bestehendes Event
+            selectedEvent.title = patientName + ' - ' + title;
+            selectedEvent.color = color;
+            selectedEvent.start = start;
+            selectedEvent.end = end;
+            calendar.fullCalendar('updateEvent', selectedEvent);
+          } else {
+            if (recurring === "none") {
+              // Erstelle ein neues Event
+              calendar.fullCalendar('renderEvent', {
+                title: patientName + ' - ' + title,
+                start: start,
+                end: end,
+                color: color
+              }, true);
+            } else {
+              // Handle recurring events
+              var interval = 1; // Default to daily
+              if (recurring === "weekly") {
+                interval = 7;
+              } else if (recurring === "monthly") {
+                interval = start.daysInMonth();
+              }
+
+              while (start.isBefore(end)) {
+                calendar.fullCalendar('renderEvent', {
+                  title: patientName + ' - ' + title,
+                  start: start,
+                  end: end,
+                  color: color
+                }, true);
+                start.add(interval, 'days');
+                end.add(interval, 'days');
+              }
+            }
+          }
+
+          $('#overlay').hide();
+          $('#event-form').hide();
+          formVisible = false;
+        }
+      });
+
+      // Lösche das Event
+      $('#delete-event').click(function() {
+        if (selectedEvent) {
+          calendar.fullCalendar('removeEvents', selectedEvent._id);
+          $('#overlay').hide();
+          $('#event-form').hide();
+          formVisible = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
